@@ -189,5 +189,6 @@ if __name__ == '__main__':
 			aa.BASE64 = parser.BASE64
 			aa.sql(parser.BASE64)
 		else:
+			print("TODO @v0.2")
 			aa.binary() 
 		f.close()
