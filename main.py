@@ -99,9 +99,9 @@ def getpymysqlbinlogobj(p,filename):
 	if p.STOP_DATETIME is not None:
 		aa.STOP_DATETIME = int(datetime.datetime.strptime(p.STOP_DATETIME, time_format).timestamp())
 	if p.START_POS is not None:
-		aa.START_POSITION = p.START_POS
+		aa.START_POSITION = int(p.START_POS)
 	if p.STOP_POS is not None:
-		aa.STOP_POSITION = p.STOP_POS
+		aa.STOP_POSITION = int(p.STOP_POS)
 	if p.GTID_INCLUDE is not None:
 		aa.FILTER_GTID_INCLUDE = p.GTID_INCLUDE
 	if p.GTID_EXCLUDE is not None:
@@ -109,9 +109,9 @@ def getpymysqlbinlogobj(p,filename):
 	if p.GTID_SKIP is not None:
 		aa.GTID_SKIP = p.GTID_SKIP
 	if p.SERVERID_INCLUDE is not None:
-		aa.FILTER_SERVERID_INCLUDE = p.SERVERID_INCLUDE
+		aa.FILTER_SERVERID_INCLUDE = int(p.SERVERID_INCLUDE)
 	if p.SERVERID_EXCLUDE is not None:
-		aa.FILTER_SERVERID_EXCLUDE = p.SERVERID_EXCLUDE
+		aa.FILTER_SERVERID_EXCLUDE = int(p.SERVERID_EXCLUDE)
 	if p.SCHEMA_INCLUDE is not None:
 		aa.FILTER_SCHEMA_INCLUDE = p.SCHEMA_INCLUDE
 	if p.SCHEMA_EXCLUDE is not None:

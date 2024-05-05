@@ -65,6 +65,8 @@ class mysqlbinlog(object):
 		self.mysql_version  = ""
 		self._pos           = 0
 		self.DELIMITER      = "/*!*/;"
+		self.BINARY         = False   # 写新的文件
+		self._bdata_pre_gtid = b''
 
 	def debug(self,*args):
 		if self.DEBUG:
@@ -77,10 +79,10 @@ class mysqlbinlog(object):
 
 
 	def _filter_server_id(self,serverid):
-		serverid = str(serverid)
+		#serverid = str(serverid)
 		# 先不管正则表达式了, 后面再说
-		if self.FILTER_SERVERID_INCLUDE is not None and self.FILTER_SERVERID_INCLUDE == serverid:
-			return True
+		if self.FILTER_SERVERID_INCLUDE is not None:# and self.FILTER_SERVERID_INCLUDE == serverid:
+			return True if self.FILTER_SERVERID_INCLUDE == serverid else False
 		if self.FILTER_SERVERID_EXCLUDE is not None:
 			return False if self.FILTER_SERVERID_EXCLUDE == serverid else True
 		return True
@@ -118,15 +120,17 @@ class mysqlbinlog(object):
 		return True
 
 	def _filter_gtid(self,gtid):
-		if self.FILTER_GTID_INCLUDE is not None and self.FILTER_GTID_INCLUDE == gtid:
-			return True
-		if self.FILTER_GTID_EXCLUDE is not None and self.FILTER_GTID_EXCLUDE == gtid:
-			return False
+		if self.FILTER_GTID_INCLUDE is not None:# and self.FILTER_GTID_INCLUDE == gtid:
+			return True if self.FILTER_GTID_INCLUDE == gtid else False
+		if self.FILTER_GTID_EXCLUDE is not None:# and self.FILTER_GTID_EXCLUDE == gtid:
+			return False if self.FILTER_GTID_EXCLUDE == gtid else True
 		return True
 
 	def read_trx_event(self):
 		"""
-		读一个事务(会匹配是否符合要求, 若一个事务里面的表均不符合要求, 则读下一个事务)
+		返回一个事务(list), 若使用schema/table过滤, 则可能破坏事务的完整性.
+		start/stop datetime 均按照gtid的时间来判断, 还是维持左闭又开(]
+		当匹配到QUERY_EVENT/XID_EVENT 则做退出判断, 如果是空事务(schema/table匹配失败), 则继续
 		"""
 		self.debug("READ TRX BEGIN")
 		trx_list = []
@@ -136,7 +140,10 @@ class mysqlbinlog(object):
 		START_POS = 0
 		TRX_BROKEN = False # 事务是否完整 False: 完整  True:不完整
 		while NOT_HAVE_TRX:
-			_startpos = self.f.tell()
+			try:
+				_startpos = self.f.tell()
+			except:
+				break
 			self._pos = _startpos
 			bdata = self.read_event()
 			if bdata == b'':
@@ -153,24 +160,27 @@ class mysqlbinlog(object):
 					if self.VERBOSE >=2:
 						self.debug(f"SKIP GTID:{aa.SID} {aa.GNO}")
 					continue
-				# 匹配开始时间
-				if self.START_DATETIME is not None and int(aa.original_commit_timestamp/1000000) >= self.START_DATETIME:
-					trx_list = []
-					if self.VERBOSE >=2:
-						self.debug(f"SKIP GTID:{aa.SID} {aa.GNO}")
-					continue
+				# 匹配时间. 使用事务开始时间, 而不是original_commit_timestamp
+				#_dt = int(aa.original_commit_timestamp/1000000)
+			#	_dt = struct.unpack('<L',bdata[:4])[0]
+			#	# 感觉还是使用QUERY TIME好点... 
+			#	if not self._filter_datetime(_dt):
+			#		trx_list = []
+			#		if self.VERBOSE >=2:
+			#			self.debug(f"SKIP GTID:{aa.SID} {aa.GNO}")
+			#		continue
 				
 				START_POS = _startpos
 				trx_list = []
 				HAVE_GTID = True
 			elif event_type == XID_EVENT: # 校验这个事务 是否符合时间, 不符合则继续
 				# 匹配结束时间
-				if self.STOP_DATETIME is not None and struct.unpack('>L',bdata[:4])[0] <= self.STOP_DATETIME:
-					trx_list = []
-					TRX_BROKEN = False
-					continue
-					
-				if len(trx_list) > 1 and HAVE_DML and not TRX_BROKEN:
+				#if self.STOP_DATETIME is not None and struct.unpack('>L',bdata[:4])[0] <= self.STOP_DATETIME:
+				#	trx_list = []
+				#	TRX_BROKEN = False
+				#	continue
+				#	
+				if len(trx_list) > 1 and HAVE_DML and HAVE_GTID:
 					NOT_HAVE_TRX = False
 					if self.VERBOSE >= 1:
 						self.debug(f"READ TRX FINISH. count event: {len(trx_list)+1}  offset:{START_POS} --> {self.f.tell()}")
@@ -208,6 +218,13 @@ class mysqlbinlog(object):
 				#trx_list.append(bdata)
 				if bdata[-5:] != b'BEGIN': #BEGIN就没必要加了. 
 					NOT_HAVE_TRX = False
+				#if bdata[-5:] == b"BEGIN":
+				else:
+					_dt = struct.unpack('<L',bdata[:4])[0]
+					if not self._filter_datetime(_dt):
+						NOT_HAVE_TRX = True
+						HAVE_GTID = False
+					
 				#break
 			else: #除了上面几种event, 其它的就不要出现在trx里面了.
 				if self.VERBOSE >= 1:
@@ -252,12 +269,16 @@ class mysqlbinlog(object):
 				self.format_desc.init()
 				self.checksum = self.format_desc.checksum
 				self.mysql_version = self.format_desc.mysql_version
+				skipn += 1
 				continue
 
 			# 跳过 PREVIOUS_GTIDS_LOG_EVENT
 			if event_type == PREVIOUS_GTIDS_LOG_EVENT :
+				self._bdata_pre_gtid = bdata
 				self.pre_gtid = pre_gtid_event(bdata=bdata[19:], debug=self.debug)
 				self.pre_gtid.init()
+				skipn += 1
+				continue
 			#	if self.VERBOSE >= 2:
 			#		self.debug("SKIP EVENT: PREVIOUS_GTIDS_LOG_EVENT")
 			#	continue
@@ -279,7 +300,9 @@ class mysqlbinlog(object):
 			if not self._filter_pos(start_pos, stop_pos):
 				if self.VERBOSE >= 2:
 					self.debug(f"position  {start_pos} --> {stop_pos} is not match. will break.")
-				return b''
+				#return b''
+				skipn += 1
+				continue
 
 		if self.VERBOSE >= 1:
 			self.debug(f"READ EVENT FINISH. EVENT TYPE:{event_type} {start_pos} --> {stop_pos}  size:{int(stop_pos-start_pos)} bytes")
@@ -299,27 +322,17 @@ class mysqlbinlog(object):
 		# 检查文件格式(不检测了. 直接报错抛异常好点)
 		self.debug(f"INIT FILENAME: {self.filename}")
 		self.f = open(self.filename,'rb')
+		relaylog_flag = False
 		if self.f.read(4) != b'\xfebin':
+			relaylog_flag = True
 			self.debug(f"{self.filename} maybe relay log")
 			self.f.seek(0,0) # relay log不用跳过magic
-		#self._bdata_format_desc = self.read_event()
-		#if self._bdata_format_desc == b'':
-		#	return False
-		#self._format_event_b64 = f"BINLOG '\n{self._base64(self._bdata_format_desc)}'{self.DELIMITER}\n"
-		#self.debug(f"format desc event b64: {self._format_event_b64}")
-		#self.format_desc = format_desc_event(bdata=self._bdata_format_desc[19:],debug=self.debug)
-		#self.format_desc.init()
-		#self.checksum = self.format_desc.checksum
-		#if self.checksum:
-		#	self.debug(f"format desc event CRC32:{hex(binascii.crc32(self._bdata_format_desc[:-4]))}")
-		##print(f"-- format desc event b64: \nBINLOG '\n{self._base64(self._bdata_format_desc)}'/*!*/;")
-		#self.mysql_version = self.mysql_version
-
-		#self._bdata_pre_gtid = self.read_event()
-		#self.pre_gtid = pre_gtid_event(bdata=self._bdata_pre_gtid[19:], debug=self.debug)
-		#self.pre_gtid.init()
-		
-
+		event = self.read_event() # 初始化一下FORMAT_EVENT和PREGTID EVENT
+		if event == b'':
+			self.debug("NO EVENT")
+		else:
+			_offset = 0 if relaylog_flag else 4
+			self.f.seek(_offset,0)
 		return True
 
 	#def analyze(self):
@@ -354,8 +367,10 @@ class mysqlbinlog(object):
 					break
 				TRX.append(trx)
 		TRX.reverse() # 两级反转
-		self.outfd.write(f"DELIMITER {self.DELIMITER}\n")
-		if TOBASE64:
+		if not self.BINARY:
+			#print(self.BINARY)
+			self.outfd.write(f"DELIMITER {self.DELIMITER}\n")
+		if TOBASE64 or self.BINARY:
 			#self.outfd.write(self._format_event_b64)
 			pass
 		else:
@@ -375,6 +390,9 @@ class mysqlbinlog(object):
 			_rowevent = []
 			for x in _x:
 				event_type = struct.unpack('>B',x[4:5])[0]
+				if self.BINARY and (event_type not in(TABLE_MAP_EVENT,WRITE_ROWS_EVENT,UPDATE_ROWS_EVENT,DELETE_ROWS_EVENT)):
+					self.write_event(x)
+					continue
 				if event_type == ANONYMOUS_GTID_LOG_EVENT :
 					self.outfd.write(f"SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by ddcw pymysqlbinlog */ {self.DELIMITER}\n")
 				if event_type == GTID_LOG_EVENT:
@@ -388,7 +406,7 @@ class mysqlbinlog(object):
 						self.outfd.write(f"SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by ddcw pymysqlbinlog */ {self.DELIMITER}\n")
 					
 				elif event_type == XID_EVENT:
-					self.outfd.write(f"COMMIT /* {struct.unpack('<Q',x[19:19+8])[0]} added by ddcw pymysqlbinlog*/ {self.DELIMITER}\n")
+					self.outfd.write(f"COMMIT /* {struct.unpack('<Q',x[19:19+8])[0]} added by ddcw pymysqlbinlog*/ {self.DELIMITER}\n\n")
 				elif event_type == QUERY_EVENT:
 					aa = query_event(bdata=x[19:],verbose=self.VERBOSE)
 					if self.VERBOSE:
@@ -398,6 +416,8 @@ class mysqlbinlog(object):
 						continue
 					# 设置初始化信息 , 整上..
 					# @@sql_mode @@auto_increment_increment @@auto_increment_offset @@character_set_client @@collation_connection @@collation_server @@lc_time_names @@collation_database @@default_collation_for_utf8mb4
+					# 输出时间戳
+					self.outfd.write(f"SET TIMESTAMP={struct.unpack('<L',x[:4])[0]} /* QUERY TIME {str(datetime.datetime.fromtimestamp(struct.unpack('<L',x[:4])[0]))} */ {self.DELIMITER}\n")
 					if "Q_SQL_MODE_CODE" in aa.status_vars_dict:
 						self.outfd.write(f"SET @@session.sql_mode={aa.status_vars_dict['Q_SQL_MODE_CODE']} {self.DELIMITER}\n")
 					if "Q_AUTO_INCREMENT" in aa.status_vars_dict:
@@ -415,7 +435,7 @@ class mysqlbinlog(object):
 					else:
 						self.outfd.write(f"{aa.query}{self.DELIMITER}\n")
 					if 'Q_DDL_LOGGED_WITH_XID' in aa.status_vars_dict:
-						self.outfd.write(f"COMMIT /* XID {aa.status_vars_dict['Q_DDL_LOGGED_WITH_XID']} added by ddcw pymysqlbinlog*/ {self.DELIMITER}\n")
+						self.outfd.write(f"COMMIT /* XID {aa.status_vars_dict['Q_DDL_LOGGED_WITH_XID']} added by ddcw pymysqlbinlog*/ {self.DELIMITER}\n\n")
 				elif event_type in [ WRITE_ROWS_EVENT,UPDATE_ROWS_EVENT,DELETE_ROWS_EVENT ]:
 					if self.ROLLBACK:
 						_rowevent.append(x)
@@ -424,6 +444,15 @@ class mysqlbinlog(object):
 						aa.checksum = self.checksum
 						aa.rollback = False
 						aa.init()
+						if self.BINARY:
+							_tablemapevent,_rowevent = aa.read_bdata()
+							if self.checksum:
+								self.write_event(_tablemapevent[:-4])
+								self.write_event(_rowevent[:-4])
+							else:
+								self.write_event(_tablemapevent)
+								self.write_event(_rowevent)
+							continue
 						if not TOBASE64:
 							for sql1 in aa.read_sql():
 								self.outfd.write(f"{sql1}{self.DELIMITER}\n")
@@ -441,6 +470,11 @@ class mysqlbinlog(object):
 							aa.checksum = self.checksum
 							aa.rollback = True
 							aa.init()
+							if self.BINARY:
+								_tablemapevent,_rowevent = aa.read_bdata()
+								self.write_event(_tablemapevent)
+								self.write_event(_rowevent)
+								continue
 							if not TOBASE64:
 								for sql1 in aa.read_sql():
 									self.outfd.write(f"{sql1}{self.DELIMITER}\n")
@@ -452,10 +486,52 @@ class mysqlbinlog(object):
 						_rowevent = []
 					else:
 						self.table_map = tablemap
-		self.outfd.write(f"DELIMITER ;\n")
+		if not self.BINARY:
+			self.outfd.write(f"DELIMITER ;\n")
+
+	def write_event(self,event):
+		# 修改偏移量(event_size不需要修改, 因为不会变), 做CRC32校验, 然后写入BINLOG FILE
+		timestamp, event_type, server_id, event_size, log_pos, flags = struct.unpack("<LBLLLh",event[0:19])
+		if self.checksum:
+			event_size = len(event) + 4
+		else:
+			event_size = len(event)
+		current_offset = self.outfd.tell()
+		log_pos = current_offset + event_size
+		event_header = struct.pack("<LBLLLh", timestamp, event_type, server_id, event_size, log_pos, flags)
+		event = event_header + event[19:]
+		if self.checksum:
+			event = event + struct.pack('<L',binascii.crc32(event))
+		self.outfd.write(event)
+		if self.VERBOSE >=4:
+			self.debug(f"REWRITE EVENT {event_type} FINISH")
+
 	def binary(self):
 		""" 生成二进制的 """
-		pass # TODO 要注意header的改写
+		_tmpstat = self.BINARY
+		_tmpstat2 = self.BASE64
+		self.BINARY = True
+		self.BASE64 = False
+		# 写BINLOG MAGIC
+		self.outfd.write(b'\xfebin')
+		# 写FORMAT EVENT and PREGTID EVENT
+		if self.checksum:
+			self.write_event(self._bdata_format_desc[:-4])
+		else:
+			self.write_event(self._bdata_format_desc)
+		# 写PREGTID EVENT
+		if self._bdata_pre_gtid != b'':
+			if self.checksum:
+				self.write_event(self._bdata_pre_gtid[:-4])
+			else:
+				self.write_event(self._bdata_pre_gtid)
+		# 写剩余的数据
+		self.sql()
+		self.BINAEY = _tmpstat
+		self.BASE64 = _tmpstat2
+		# 写ROTATE_EVENT
+		# 算了...
+		
 
 	def analyze(self):
 		"""分析binlog, 返回分析后的数据."""
@@ -513,70 +589,3 @@ class mysqlbinlog(object):
 			TRX.append([xid,stop_pos-start_pos,start_pos,stop_pos])
 		return TRX,EVENT,TABLE
 
-	#只作测试使用, 发布前要删除的
-	def test(self):
-		#print(self.analyze())
-		#self.ROLLBACK = True
-		#self.GTID_SKIP = True
-		self.sql(True)
-		return ''
-		#return None
-		#cc = format_desc_event(bdata=self.read_event()[19:],debug=self.debug) #first event
-		#cc.init()
-
-		#bb = pre_gtid_event(bdata=self.read_event()[19:], debug=self.debug) #PREVIOUS_GTIDS_LOG_EVENT
-		#bb.init()
-		
-	#	trx = self.read_trx_event()
-	#	print("TRX LENGTH: ",len(trx))
-	#	for x in trx:
-	#		#self.write(struct.unpack('>B',x[4:5])[0],'xx')
-	#		if struct.unpack('>B',x[4:5])[0] in [ GTID_LOG_EVENT, ANONYMOUS_GTID_LOG_EVENT ]:
-	#			#print('TYPE',struct.unpack('>B',x[4:5])[0])
-	#			if self.VERBOSE:
-	#				aa = gtid_event(bdata=x[19:],debug=self.debug)
-	#			else:
-	#				aa = gtid_event(bdata=x[19:],)
-	#			if struct.unpack('>B',x[4:5])[0] == ANONYMOUS_GTID_LOG_EVENT:
-	#				aa.IS_ANON_GTID = True
-	#			aa.init()
-		while True:
-			trx = self.read_trx_event()
-			if len(trx) == 0:
-				break
-			#print("TRX LENGTH: ",len(trx))
-			for x in trx:
-				event_type = struct.unpack('>B',x[4:5])[0]
-				#print('EVENT_TYPE:',event_type)
-				if event_type in [ GTID_LOG_EVENT, ANONYMOUS_GTID_LOG_EVENT ]:
-					if self.VERBOSE:
-						#aa = gtid_event(bdata=x[19:],debug=self.debug)
-						aa = gtid_event(bdata=x[19:])
-					else:
-						aa = gtid_event(bdata=x[19:],)
-					#aa.init()
-				elif event_type == TABLE_MAP_EVENT:
-					#self.debug(f"TABLE MAP EVENT: {event_type} {x}")
-					#aa  = tablemap_event(bdata=x[19:],debug=self.debug)
-					aa  = tablemap_event(bdata=x[19:],event_header=x[:19])
-					aa.init()
-					self.table_map = aa
-					#print(aa.read_column_name())
-				elif event_type in [ WRITE_ROWS_EVENT,UPDATE_ROWS_EVENT,DELETE_ROWS_EVENT ]:
-					aa = row_event(bdata=x[19:],verbose=self.VERBOSE,debug=self.debug,tablemap=self.table_map,event_header=x[:19])
-					aa.checksum = True
-					aa.init()
-					for sql1 in aa.read_sql():
-						print(sql1)
-					#for sql1 in aa.read_bdata():
-					#	self.outfd.write(sql1)
-				elif event_type == XID_EVENT:
-					#self.debug(f"XID:{struct.unpack('<Q',x[19:19+8])[0]}")
-					print(f"COMMIT /*{struct.unpack('<Q',x[19:19+8])[0]}*/")
-					#print(f"XID:{struct.unpack('<Q',x[19:19+8])[0]}")
-				elif event_type == QUERY_EVENT:
-					aa = query_event(bdata=x[19:],debug=self.debug)
-					aa.init()
-					print(aa.query)
-				elif event_type == ROWS_QUERY_LOG_EVENT:
-					print('--',x[20:].decode()) # 如果TABLE MAP里面有这个的话, 顺序回放SQL就简单点了. 但本项目主打回滚, 所以就直接忽略这个吧

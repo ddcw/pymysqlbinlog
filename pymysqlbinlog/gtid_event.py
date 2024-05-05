@@ -110,7 +110,8 @@ gtid_list	gtid_number*gtid_info
 				stop  = self.read_uint(8)-1
 				gtid_info += f":{start}-{stop}"
 			gtid_list.append(gtid_info)
-		self.debug(f"Previous-GTIDs: {gtid_list}")
+		if self.verbose >= 2:
+			self.debug(f"Previous-GTIDs: {gtid_list}")
 
 # 匿名gtid
 class anonymous_gtid_event(gtid_event):

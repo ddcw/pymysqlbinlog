@@ -75,37 +75,47 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64 --rollback
 
 ### 数据过滤
 
-时间过滤
+**时间过滤**
+
+维持事务完整性. 使用QUEYR_EVENT(即BEGIN的时间来匹配)
 
 ```shell
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-datetime="2024-05-04 11:14:15" --stop-datetime="2024-05-04 11:14:23" 
 ```
 
-表名过滤
+**表名过滤**
+
+事务可能不完整
 
 ```shell
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --table='sbtest1'
 ```
 
-库名过滤
+**库名过滤**
+
+事务可能不完整
 
 ```shell
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --schema='db1'
 ```
 
-POS过滤
+**POS过滤**
+
+维持事务完整性.  read_event的时候就匹配了POS信息
 
 ```shell
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-pos=780
 ```
 
-GTID过滤
+**GTID过滤**
+
+维持事务完整性. 若不匹配, 则进行下一个事务.
 
 ```shell
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --gtid 'b68e2434-cd30-11ec-b536-000c2980c11e'
 ```
 
-SERVERID过滤
+**SERVERID过滤**
 
 ```shell
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --serverid=3314
@@ -129,15 +139,17 @@ SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by ddcw pymysqlbinlog */ /*!*/;
 
 由于TRX太多了, 不方便展示, 故只取 TOP20 大事务.  TABLE按照TOTAL_SIZE排序, 对于TABLE的COUNT表示行数.
 
-支持输出md格式.
+(支持输出md格式.)
 
 ```shell
+# 以TXT信息输出到屏幕(STDOUT)
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --analyze
 ```
 
 或者
 
 ```shell
+# 以MARKDOWN格式输出到指定文件
 python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --analyze -o t20240505.md
 ```
 
