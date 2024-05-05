@@ -47,7 +47,7 @@ class mysqlbinlog(object):
 		self.VERBOSE        = 0       # 输出更多信息,STDERR
 		self.GTID_SKIP      = False
 		self.ROLLBACK       = False
-		self.BASE64         = True    # 数据以base64格式输出
+		self.BASE64         = False   # 数据以base64格式输出
 		self.SQL            = False   # 数据以注释的SQL格式输出
 		self.SQL2           = False   # 数据以非注释的SQL格式输出 与SQL冲突, 仅一个为True, 都为True时, 仅SQL有效
 		self.DEBUG          = False   # DEBUG. 直接写stderr, 不需要指定文件
@@ -154,7 +154,7 @@ class mysqlbinlog(object):
 						self.debug(f"SKIP GTID:{aa.SID} {aa.GNO}")
 					continue
 				# 匹配开始时间
-				if not (self.START_DATETIME is not None and aa.original_commit_timestamp >= self.START_DATETIME):
+				if self.START_DATETIME is not None and int(aa.original_commit_timestamp/1000000) >= self.START_DATETIME:
 					trx_list = []
 					if self.VERBOSE >=2:
 						self.debug(f"SKIP GTID:{aa.SID} {aa.GNO}")
@@ -382,6 +382,8 @@ class mysqlbinlog(object):
 						aa = gtid_event(bdata=x[19:])
 						aa.init()
 						self.outfd.write(f"SET @@SESSION.GTID_NEXT= '{aa.SID}:{aa.GNO}' {self.DELIMITER}\n")
+					elif self.ROLLBACK:
+						self.outfd.write(f"SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by ddcw pymysqlbinlog */ {self.DELIMITER}\n")
 					else:
 						self.outfd.write(f"SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by ddcw pymysqlbinlog */ {self.DELIMITER}\n")
 					

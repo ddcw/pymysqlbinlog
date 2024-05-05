@@ -156,25 +156,45 @@ if __name__ == '__main__':
 						TABLE[x][y]['SIZE']  += c[x][y]['SIZE']
 						TABLE[x][y]['COUNT'] += c[x][y]['COUNT']
 						TABLE[x][y]['ROWS']  += c[x][y]['ROWS']
+		# 只取TOP20大事务, 不然太多了.
+		TRX = sorted(TRX, key=lambda x: x[1])
+		TRX = TRX[-20:]
+		TRX.reverse()
+
+		# TABLE 转为 2-d array 按照TOTAL_SIZE排序
+		_TABLE = []
+		for x in TABLE:
+			_TABLE.append([x, TABLE[x]['INSERT']['SIZE']+TABLE[x]['DELETE']['SIZE']+TABLE[x]['UPDATE']['SIZE'], TABLE[x]['INSERT']['COUNT']+TABLE[x]['DELETE']['COUNT']+TABLE[x]['UPDATE']['COUNT'], TABLE[x]['INSERT']['SIZE'], TABLE[x]['INSERT']['COUNT'], TABLE[x]['DELETE']['SIZE'], TABLE[x]['DELETE']['COUNT'], TABLE[x]['UPDATE']['SIZE'], TABLE[x]['UPDATE']['COUNT'], ])
+		TABLE = sorted(_TABLE, key=lambda x: x[1])
+		TABLE.reverse()
+
 		if md_flag:
 			f = open(parser.OUTPUT_FILE,'a')
-			f.write(_tmd("事务执行情况",['XID','事务大小(字节)',"起始偏移量","结束偏移量"],TRX))
+			f.write(_tmd("TOP20事务",['XID','事务大小(字节)',"起始偏移量","结束偏移量"],TRX))
 			event_list = []
 			for x in EVENT:
 				event_list.append([event_type_dict[str(x)], EVENT[x]['SIZE'], EVENT[x]['COUNT']])
-			f.write(_tmd("EVENT情况",["EVENT NAME","EVENT总大小(字节)","EVENT数量"],event_list))
-			tblist = []
-			for x in TABLE:
-				tblist.append([x,TABLE[x]['DELETE']['SIZE'], TABLE[x]['DELETE']['COUNT'], TABLE[x]['DELETE']['ROWS'],  TABLE[x]['INSERT']['SIZE'], TABLE[x]['INSERT']['COUNT'], TABLE[x]['INSERT']['ROWS'], TABLE[x]['UPDATE']['SIZE'], TABLE[x]['UPDATE']['COUNT'], TABLE[x]['UPDATE']['ROWS'],  ])
-			f.write(_tmd("表情况",["表名字",'DELETE大小(byte)', 'DELETE次数(event_count)','DELETE行数(rows)','INSERT大小(byte)', 'INSERT次数(event_count)','INSERT行数(rows)','UPDATE大小(byte)', 'UPDATE次数(event_count)','UPDATE行数(a+b=1)',],tblist))
+			f.write(_tmd("EVENT INFO",["EVENT NAME","EVENT总大小(字节)","EVENT数量"],event_list))
+			f.write(_tmd("TABLE INFO",['TABLE_NAME','TOTAL_SIZE(bytes)','TOTAL_COUNT(rows)','INSERT_SIZE','INSERT_COUNT','DELETE_SIZE','DELETE_COUNT','UPDATE_SIZE','UPDATE_COUNT'],TABLE))
 			f.close()
-			print(f"\n请查看markdown文件:{parser.OUTPUT_FILE}\n")
+			print(f"\n请查看markdown文件:\t{parser.OUTPUT_FILE}\n")
 		else:
-			print("XID 大小 起始POS 结束POS:\n",TRX)
-			print("EVENT信息:")
+			f = open(parser.OUTPUT_FILE,'a') if parser.OUTPUT_FILE is not None else sys.stdout
+			# TRX INFO
+			f.write("\n######### TOP20大事务 ############\nXID\tSIZE(bytes)\tSTART_POS\tSTOP_POS\n")
+			for x in TRX:
+				f.write(f"{x[0]}\t{x[1]}\t{x[2]}\t{x[3]}\n")
+
+			# EVENT INFO
+			f.write("\n\n######### EVENT INFO ############\nEVENT_NAME\tTOTAL_SIZE(bytes)\tTOTAL_COUNT\n")
 			for x in EVENT:
-				print(f"{event_type_dict[str(x)]}\t{EVENT[x]}")
-			print("TABLE信息:\n",TABLE)
+				f.write(f"{event_type_dict[str(x)]}\t{EVENT[x]['SIZE']}\t{EVENT[x]['COUNT']}\n")
+
+			# TABLE INFO
+			f.write("\n\n######### TABLE INFO ############\nTABLE_NAME\tTOTAL_SIZE(bytes)\tTOTAL_COUNT(rows)\tINSERT_SIZE\tINSERT_COUNT\tDELETE_SIZE\tDELETE_COUNT\tUPDATE_SIZE\tUPDATE_COUNT\n")
+			for x in TABLE:
+				f.write('\t'.join([ str(y) for y in x])+"\n")
+			f.close()
 	else:
 		aa = getpymysqlbinlogobj(parser,list(filenames)[0])
 		if parser.OUTPUT_FILE is not None and not parser.BINARY:
@@ -189,6 +209,5 @@ if __name__ == '__main__':
 			aa.BASE64 = parser.BASE64
 			aa.sql(parser.BASE64)
 		else:
-			print("TODO @v0.2")
 			aa.binary() 
 		f.close()

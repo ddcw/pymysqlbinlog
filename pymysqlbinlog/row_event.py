@@ -560,6 +560,8 @@ class tablemap_event(event):
 	def read_column_value(self,vl,mt,kvork=0):
 		cl = self.read_column_name()
 		rdata = ""
+		if len(vl) == 0:
+			return rdata
 		for x in range(self.column_count):
 			t = self.column_type[x]
 			k = cl[x]
