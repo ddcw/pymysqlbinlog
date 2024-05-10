@@ -49,13 +49,13 @@ git clone git@github.com:ddcw/pymysqlbinlog.git
 解析为`SQL`格式
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --sql
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --sql
 ```
 
 解析为`base64`格式
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64
 ```
 
 
@@ -63,12 +63,12 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64
 ### 解析为回滚SQL
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64 --rollback # 推荐
-#python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --sql --rollback 
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64 --rollback # 推荐
+#python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --sql --rollback 
 ```
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64 --rollback --verbose=4
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64 --rollback --verbose=4
 ```
 
 
@@ -80,7 +80,7 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --base64 --rollback
 维持事务完整性. 使用QUEYR_EVENT(即BEGIN的时间来匹配)
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-datetime="2024-05-04 11:14:15" --stop-datetime="2024-05-04 11:14:23" 
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-datetime="2024-05-04 11:14:15" --stop-datetime="2024-05-04 11:14:23" 
 ```
 
 **表名过滤**
@@ -88,7 +88,7 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-datet
 事务可能不完整
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --table='sbtest1'
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --table='sbtest1'
 ```
 
 **库名过滤**
@@ -96,7 +96,7 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --table='sbte
 事务可能不完整
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --schema='db1'
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --schema='db1'
 ```
 
 **POS过滤**
@@ -104,7 +104,7 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --schema='db1
 维持事务完整性.  read_event的时候就匹配了POS信息
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-pos=780
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-pos=780
 ```
 
 **GTID过滤**
@@ -112,13 +112,13 @@ python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --start-pos=7
 维持事务完整性. 若不匹配, 则进行下一个事务.
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --gtid 'b68e2434-cd30-11ec-b536-000c2980c11e'
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --gtid 'b68e2434-cd30-11ec-b536-000c2980c11e'
 ```
 
 **SERVERID过滤**
 
 ```shell
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --serverid=3314
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000040 --sql --serverid=3314
 ```
 
 
@@ -143,14 +143,14 @@ SET @@SESSION.GTID_NEXT= 'AUTOMATIC' /* added by ddcw pymysqlbinlog */ /*!*/;
 
 ```shell
 # 以TXT信息输出到屏幕(STDOUT)
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --analyze
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --analyze
 ```
 
 或者
 
 ```shell
 # 以MARKDOWN格式输出到指定文件
-python main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --analyze -o t20240505.md
+python3 main.py /data/mysql_3314/mysqllog/binlog/m3314.000027 --analyze -o t20240505.md
 ```
 
 若为非md文件, 则为txt格式. 可以直接将结果复制到excel等工具查看, 还可以画图使结果更直观.
