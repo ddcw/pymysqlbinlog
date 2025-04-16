@@ -164,7 +164,7 @@ if __name__ == '__main__':
 		# TABLE 转为 2-d array 按照TOTAL_SIZE排序
 		_TABLE = []
 		for x in TABLE:
-			_TABLE.append([x, TABLE[x]['INSERT']['SIZE']+TABLE[x]['DELETE']['SIZE']+TABLE[x]['UPDATE']['SIZE'], TABLE[x]['INSERT']['COUNT']+TABLE[x]['DELETE']['COUNT']+TABLE[x]['UPDATE']['COUNT'], TABLE[x]['INSERT']['SIZE'], TABLE[x]['INSERT']['COUNT'], TABLE[x]['DELETE']['SIZE'], TABLE[x]['DELETE']['COUNT'], TABLE[x]['UPDATE']['SIZE'], TABLE[x]['UPDATE']['COUNT'], ])
+			_TABLE.append([x, TABLE[x]['INSERT']['SIZE']+TABLE[x]['DELETE']['SIZE']+TABLE[x]['UPDATE']['SIZE'], TABLE[x]['INSERT']['ROWS']+TABLE[x]['DELETE']['ROWS']+TABLE[x]['UPDATE']['ROWS'], TABLE[x]['INSERT']['SIZE'], TABLE[x]['INSERT']['ROWS'], TABLE[x]['DELETE']['SIZE'], TABLE[x]['DELETE']['ROWS'], TABLE[x]['UPDATE']['SIZE'], TABLE[x]['UPDATE']['ROWS'], ])
 		TABLE = sorted(_TABLE, key=lambda x: x[1])
 		TABLE.reverse()
 
