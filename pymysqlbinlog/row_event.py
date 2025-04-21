@@ -169,7 +169,7 @@ class row_event(event):
 			#null判断 TODO
 			if self.tablemap.null_bits_boolean[coln] and (nullbits&(1<<coln)):
 				row.append(None)
-			if col_type == MYSQL_TYPE_NEWDECIMAL: # 没见过MYSQL_TYPE_DECIMAL
+			elif col_type == MYSQL_TYPE_NEWDECIMAL: # 没见过MYSQL_TYPE_DECIMAL
 				#t00 = self.read_uint(1)
 				#t0  = self.read_uint(1)
 				#t11 = int(t00/9)*4 + int(((t00%2)+1)/2)
