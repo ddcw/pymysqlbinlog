@@ -23,7 +23,7 @@ class format_desc_event(event):
 		if self.mysql_version[:1] == "5":
 			self.event_post_header_len = self.read(38)
 		elif self.mysql_version[:4] == "8.4.":
-			self.event_post_header_len = self.read(43) # FOR MYSQL 8.4
+			self.event_post_header_len = self.read(42) # FOR MYSQL 8.4
 		elif self.mysql_version[:1] == "8":
 			self.event_post_header_len = self.read(41)
 		self.debug(f"event_post_header_len: {[ x for x in self.event_post_header_len ]}")
